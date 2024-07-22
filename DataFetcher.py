@@ -1,20 +1,20 @@
 import requests
 import pandas as pd
 import time
-import json
-from DataProcessor import explode_json
+from DataProcessor import explode_json, clean_newlines, findFirstList
 
-def count_export(exportUrl, headers):
+def count_export(exportUrl, headers, query):
     """
-    Fetches the count of vulnerabilities from the API.
+    Fetches the count of vulnerabilities from the API using a provided query.
 
     :param exportUrl: URL for the API endpoint
     :param headers: Headers for API requests
+    :param query: GraphQL query string to fetch the count
     :return: Count of vulnerabilities
     """
     countPacket = {
-        'query': 'query MyQuery { countHostVulnerability(filter: "(affectsRunningKernel = True OR affectsRunningKernel NOT_EXISTS) AND lastFound IN_LAST 5d AND status = Active AND targets.osType = Client") }',
-        'variables': None, 
+        'query': query,
+        'variables': None,
         'operationName': 'MyQuery',
     }
 
@@ -27,57 +27,22 @@ def count_export(exportUrl, headers):
     except requests.exceptions.RequestException as e:
         print(f'Error fetching count: {e}')
         return 0
-
-def json_data_export(offset, headers, exportUrl, sharedData, retries=3, delay=5):
+    
+def json_data_export(offset, headers, exportUrl, sharedData, query, column_order, retries=3, delay=5):
     """
-    Fetches and processes a chunk of data from the API.
+    Fetches and processes a chunk of data from the API using a custom query and column order.
 
     :param offset: Offset for the data chunk
     :param headers: Headers for API requests
     :param exportUrl: URL for the API endpoint
     :param sharedData: Shared list to store fetched data
+    :param query: GraphQL query string to fetch data
+    :param column_order: List of column names in the desired order
     :param retries: Number of retry attempts in case of failure
     :param delay: Delay between retry attempts in seconds
     """
     dataPacket = {
-        'query': f'''
-            query MyQuery {{
-                listHostVulnerability(
-                    limit: 5000, offset: {offset}, 
-                    filter: "(affectsRunningKernel = True OR affectsRunningKernel NOT_EXISTS) AND lastFound IN_LAST 5d AND status = Active AND targets.osType = Client"
-                ) {{
-                    lastFound 
-                    targets {{ 
-                        name 
-                        domains 
-                        ipAddresses 
-                        operatingSystem 
-                        dnsName 
-                        fqdn 
-                        netbiosName 
-                    }} 
-                    definition {{ 
-                        qid 
-                        cves {{ uid }} 
-                        exportableSolution 
-                        name
-                    }} 
-                    exportableOutput 
-                    internetFacing 
-                    riskRating 
-                    ageInDays 
-                    complianceStatus 
-                    dueDate 
-                    firstFound 
-                    timesFound 
-                    lastFixed 
-                    disposition 
-                    primaryConsolidationKey 
-                    type 
-                    status
-                }}
-            }}
-        ''',
+        'query': query,
         'variables': None, 
         'operationName': 'MyQuery',
     }
@@ -104,13 +69,6 @@ def json_data_export(offset, headers, exportUrl, sharedData, retries=3, delay=5)
                 df['exportableOutput'] = df['exportableOutput'].apply(clean_newlines)
             
             # Ensure all expected columns are present
-            column_order = [
-                'targets_name', 'targets_domains', 'targets_ipAddresses', 'targets_operatingSystem', 'targets_dnsName',
-                'targets_fqdn', 'targets_netbiosName', 'definition_qid', 'type', 'definition_name', 'definition_cves',
-                'exportableOutput', 'definition_exportableSolution', 'internetFacing','riskRating', 'ageInDays',
-                'complianceStatus', 'dueDate', 'firstFound', 'lastFound', 'timesFound', 'lastFixed', 'disposition',
-                'status', 'primaryConsolidationKey'
-            ]
             for col in column_order:
                 if col not in df.columns:
                     df[col] = None

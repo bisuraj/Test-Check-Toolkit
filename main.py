@@ -14,25 +14,88 @@ tempDir = tempfile.gettempdir()
 
 # Directories and file paths
 userHome = os.path.expanduser("~")
-filename = os.path.join(userHome, f'Documents/Workstation_AVR_{datetime.date.today()}')
+
+# Define the FileName and path depending on your use case
+file_name = "WorkStations_AVR"
+filename = os.path.join(userHome, f'Documents/{file_name}_{datetime.date.today()}')
+
 csvName = f'{filename}.csv'
 archPath = f'{filename}.7z'
+
 exportUrl = 'https://bakerhughes.brinqa.net/graphql/caasm'
 
 def main():
     """
     Main function to run the data fetching, processing, and saving workflow.
     """
-    # Initialize shared data storage
+    # Initialize shared data storage for multiprocessing
     manager = mp.Manager()
     sharedData = manager.list()
     
     # Authenticate and fetch headers
     exportHeaders = access_token()
     
-    # Fetch count of vulnerabilities
-    count = count_export(exportUrl, exportHeaders)
-    print(f'Total Vulns: {count}')
+    # Define the GraphQL query for count
+    count_query = '''
+        query MyQuery {
+            countHostVulnerability(
+                filter: "(affectsRunningKernel = True OR affectsRunningKernel NOT_EXISTS) AND lastFound IN_LAST 5d AND status = Active AND targets.osType = Client"
+            )
+        }
+    '''
+    
+    # Fetch the count using the provided query
+    count = count_export(exportUrl, exportHeaders, count_query)
+    print(f'Total count: {count}')
+    
+    # Define the GraphQL query for data export
+    data_query = '''
+        query MyQuery($offset: Int!) {
+            listHostVulnerability(
+                limit: 5000, offset: $offset, 
+                filter: "(affectsRunningKernel = True OR affectsRunningKernel NOT_EXISTS) AND lastFound IN_LAST 5d AND status = Active AND targets.osType = Client"
+            ) {
+                lastFound 
+                targets { 
+                    name 
+                    domains 
+                    ipAddresses 
+                    operatingSystem 
+                    dnsName 
+                    fqdn 
+                    netbiosName 
+                } 
+                definition { 
+                    qid 
+                    cves { uid } 
+                    exportableSolution 
+                    name
+                } 
+                exportableOutput 
+                internetFacing 
+                riskRating 
+                ageInDays 
+                complianceStatus 
+                dueDate 
+                firstFound 
+                timesFound 
+                lastFixed 
+                disposition 
+                primaryConsolidationKey 
+                type 
+                status
+            }
+        }
+    '''
+    
+    # Define the column order for the final DataFrame
+    column_order = [
+        'targets_name', 'targets_domains', 'targets_ipAddresses', 'targets_operatingSystem', 'targets_dnsName',
+        'targets_fqdn', 'targets_netbiosName', 'definition_qid', 'type', 'definition_name', 'definition_cves',
+        'exportableOutput', 'definition_exportableSolution', 'internetFacing', 'riskRating', 'ageInDays',
+        'complianceStatus', 'dueDate', 'firstFound', 'lastFound', 'timesFound', 'lastFixed', 'disposition',
+        'status', 'primaryConsolidationKey'
+    ]
     
     # Check if previous data exists and determine offsets
     if check_existing_file(csvName):
@@ -47,7 +110,7 @@ def main():
         writemode = 'w'
     
     # Fetch data in parallel
-    parallel_runs(offsets, exportHeaders, exportUrl, sharedData)
+    parallel_runs(offsets, exportHeaders, exportUrl, sharedData, data_query, column_order)
     
     # Combine data and save to CSV
     combinedDf = pd.concat(sharedData, ignore_index=True)
