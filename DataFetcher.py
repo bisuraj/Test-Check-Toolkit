@@ -1,8 +1,10 @@
 import requests
 import pandas as pd
 import time
+import tempfile
 from DataProcessor import explode_json, clean_newlines, findFirstList
 
+tempDir = tempfile.gettempdir()
 def count_export(exportUrl, headers, query):
     """
     Fetches the count of vulnerabilities from the API using a provided query.
@@ -19,7 +21,7 @@ def count_export(exportUrl, headers, query):
     }
 
     try:
-        response = requests.post(exportUrl, headers=headers, json=countPacket, timeout=30)
+        response = requests.post(exportUrl, headers=headers, json=countPacket, timeout=30,verify=tempDir +'\\Brinqa.pem')
         response.raise_for_status()  # Raise HTTPError for bad responses
         countJson = response.json()
         exportCount = countJson.get('data', {}).get('countHostVulnerability', 0)
@@ -49,7 +51,7 @@ def json_data_export(offset, headers, exportUrl, sharedData, query, column_order
 
     for attempt in range(retries):
         try:
-            response = requests.post(exportUrl, headers=headers, json=dataPacket, timeout=120)
+            response = requests.post(exportUrl, headers=headers, json=dataPacket, timeout=120,verify=tempDir +'\\Brinqa.pem')
             response.raise_for_status()
             dataJson = response.json()
             
@@ -78,8 +80,17 @@ def json_data_export(offset, headers, exportUrl, sharedData, query, column_order
             break  # Exit loop if successful
         
         except requests.exceptions.RequestException as e:
-            print(f'Error fetching data: {e}. Retrying in {delay} seconds...')
+            print(f'Error: {e}. Rerying in {delay} seconds...')
+            time.sleep(delay)
+        except requests.exceptions.HTTPError as e:
+            print(f'Http error: {e}. Rerying in {delay} seconds...')
+            time.sleep(delay)
+        except requests.exceptions.ConnectionError as e:
+            print(f'Connection error: {e}. Rerying in {delay} seconds...')
+            time.sleep(delay)
+        except requests.exceptions.Timeout as e:
+            print(f'Timeout error: {e}. Rerying in {delay} seconds...')
             time.sleep(delay)
         except Exception as e:
-            print(f'Unexpected error: {e}. Retrying in {delay} seconds...')
+            print(f'Unexpected error: {e}. Rerying in {delay} seconds...')
             time.sleep(delay)

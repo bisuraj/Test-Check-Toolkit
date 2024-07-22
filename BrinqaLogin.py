@@ -1,7 +1,7 @@
 import requests
 import tempfile
 import os
-from CertFetcher import getPEMFile
+import CertFetcher
 # Define the temporary directory for storing the certificate
 tempDir = tempfile.gettempdir()
 
@@ -19,7 +19,7 @@ def access_token():
     :return: Dictionary containing headers for API requests with the access token
     """
     # Obtain the certificate and write it to a file
-    cert = getPEMFile('bakerhughes.brinqa.net', 443)
+    cert = CertFetcher.getPEMFile('bakerhughes.brinqa.net', 443)
     cert_path = os.path.join(tempDir, 'Brinqa.pem')
     with open(cert_path, 'w') as certFile:
         certFile.write(cert)
