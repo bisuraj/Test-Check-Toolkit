@@ -1,11 +1,16 @@
 import os
 import datetime
 import pandas as pd
+import multiprocessing as mp
+import tempfile
 from BrinqaLogin import access_token
-from DataFetcher import count_export
+from DataFetcher import count_export, json_data_export
 from DataProcessor import explode_json, clean_newlines, previous_run
 from FileHandler import save_to_csv, archive_file, check_existing_file
 from ParallelExecutor import parallel_runs
+
+# Define the temporary directory for storing the certificate
+tempDir = tempfile.gettempdir()
 
 # Directories and file paths
 userHome = os.path.expanduser("~")
